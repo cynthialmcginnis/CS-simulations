@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Multi-Domain Classifier Demo</title>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #f4f6f8;
+    --card: #ffffff;
+    --border: #d9dee5;
+    --text: #21303f;
+    --muted: #5b6b7c;
+    --navy: #003366;
+    --gold: #F2A900;
+    --blue: #2f80ed;
+    --green: #27ae60;
+    --orange: #e67e22;
+    --red: #0b5394;
+    --pink: #eef4fb;
+    --pink-text: #24476b;
+    --shadow: 0 6px 18px rgba(34, 53, 78, 0.08);
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .container { max-width: 1320px; margin: 0 auto; padding: 24px; }
+  h1, h2, h3 { margin: 0 0 12px; }
+  h1 { color: var(--navy); }
+  p { color: var(--muted); line-height: 1.5; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 20px;
+  }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+  .grid-4 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+  .top-actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0; align-items: center; }
+  button, input, select { font: inherit; }
+  button {
+    border: none; border-radius: 10px; padding: 12px 16px;
+    color: white; cursor: pointer; font-weight: 700;
+  }
+  button:disabled { opacity: 0.55; cursor: not-allowed; }
+  button:focus-visible, select:focus-visible, input:focus-visible {
+    outline: 3px solid var(--gold); outline-offset: 2px;
+  }
+  .btn-blue { background: var(--blue); }
+  .btn-green { background: var(--green); }
+  .btn-gray { background: #7f8c8d; }
+  .btn-navy { background: var(--navy); }
+  .status {
+    padding: 12px 14px; border-radius: 10px; background: #eef4fb;
+    color: #24476b; border: 1px solid #cfe0f5; margin-top: 12px; white-space: pre-wrap;
+  }
+  .prediction-box {
+    margin-top: 18px; background: var(--pink); color: var(--pink-text);
+    border: 1px solid #cfe0f5; border-radius: 12px; padding: 18px;
+    font-size: 26px; text-align: center; font-weight: 800; line-height: 1.3;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { border-bottom: 1px solid #e7ebf0; padding: 10px; text-align: left; }
+  th { background: #34495e; color: white; position: sticky; top: 0; }
+  caption { text-align: left; font-weight: 700; color: var(--navy); padding-bottom: 8px; }
+  .table-wrap { overflow: auto; max-height: 310px; border: 1px solid var(--border); border-radius: 10px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  label { display: block; font-weight: 700; margin-bottom: 6px; }
+  .field input, .field select {
+    width: 100%; border: 1px solid #cfd7e2; border-radius: 8px; padding: 10px 12px; background: white;
+  }
+  .chart-card canvas { width: 100% !important; height: 300px !important; }
+  .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+  .metric { border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: #fbfcfd; }
+  .metric .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .metric .value { font-size: 24px; font-weight: 800; margin-top: 6px; }
+  .note {
+    margin-top: 16px; padding: 12px 14px; border-left: 4px solid var(--gold);
+    background: #fff7e8; color: #6f4d10; border-radius: 8px;
+  }
+  .small { font-size: 13px; color: var(--muted); }
+  .confusion-wrap { margin-top: 10px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .confusion-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 15px; }
+  .confusion-table th, .confusion-table td { border: 1px solid #dfe5ec; padding: 16px 10px; text-align: center; }
+  .confusion-table th { background: #34495e; color: white; position: static; }
+  .cm-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .05em; }
+  .cm-value { font-size: 28px; font-weight: 800; }
+  .cm-tn { background: rgba(39,174,96,.12); }
+  .cm-fp { background: rgba(11,83,148,.12); }
+  .cm-fn { background: rgba(230,126,34,.12); }
+  .cm-tp { background: rgba(47,128,237,.12); }
+  .legend-note { margin-top: 12px; font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .dataset-picker { margin-top: 14px; }
+  .dataset-picker select { padding: 10px 12px; border-radius: 8px; border: 1px solid #cfd7e2; min-width: 320px; }
+  .dataset-desc { margin-top: 10px; font-size: 14px; }
+  .visually-hidden {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+  }
+  @media (max-width: 900px) {
+    .grid-2, .grid-4, .form-grid, .metric-grid { grid-template-columns: 1fr; }
+    .prediction-box { font-size: 22px; }
+    .confusion-table { font-size: 13px; }
+    .cm-value { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+  <main class="container">
+    <h1>Multi-Domain Classifier Demo</h1>
+    <p>Train a small neural network in your browser on a dataset from your own field, or upload your own matching CSV. Watch it learn from real data, then test predictions and see exactly how confident (and how right) it is.</p>
+
+    <div class="card">
+      <h2>Step 1: Choose a Dataset</h2>
+      <label for="datasetSelect">Dataset</label>
+      <div class="dataset-picker">
+        <select id="datasetSelect" aria-describedby="datasetDesc">
+          <option value="churn">Streaming Service Subscriptions (general/business)</option>
+          <option value="login">Cybersecurity: Login Attempt Review</option>
+          <option value="shipment">Logistics: Shipment Delay Risk</option>
+          <option value="health">Healthcare: Patient Readmission Risk (synthetic teaching data)</option>
+          <option value="equipment">Maintenance: Equipment Failure Risk</option>
+        </select>
+      </div>
+      <p class="dataset-desc" id="datasetDesc"></p>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <h2>Step 2: Load Data</h2>
+      <div class="top-actions">
+        <input type="file" id="csvFile" accept=".csv" aria-label="Upload your own CSV file matching the selected dataset's columns" />
+        <button class="btn-gray" id="loadSampleBtn">Load Sample Data</button>
+      </div>
+      <div class="small" id="expectedColumns"></div>
+      <div id="datasetStatus" class="status" role="status" aria-live="polite">Choose a dataset above, then load the sample data or upload your own CSV.</div>
+      <div class="table-wrap" style="margin-top:14px;">
+        <table id="previewTable">
+          <caption class="visually-hidden">Preview of the first rows of loaded data</caption>
+        </table>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h2>Step 3: Train the Network</h2>
+        <p id="trainingInfo">Load a dataset first to enable training.</p>
+        <div class="top-actions">
+          <button class="btn-blue" id="trainBtn" disabled>Train Neural Network</button>
+        </div>
+        <div class="top-actions">
+          <button class="btn-gray" id="saveBtn" disabled>Save Model</button>
+          <button class="btn-gray" id="loadBtn">Load Model</button>
+          <input type="file" id="modelFiles" accept=".json,.bin" multiple style="display:none;" />
+        </div>
+        <div id="trainStatus" class="status" role="status" aria-live="polite">Model not trained.</div>
+        <div class="metric-grid">
+          <div class="metric"><div class="label">Rows</div><div class="value" id="metricRows">0</div></div>
+          <div class="metric"><div class="label" id="posClassLabel">Positive</div><div class="value" id="metricPos">0</div></div>
+          <div class="metric"><div class="label" id="negClassLabel">Negative</div><div class="value" id="metricNeg">0</div></div>
+          <div class="metric"><div class="label">Accuracy</div><div class="value" id="metricAccuracy">0.00</div></div>
+        </div>
+        <div class="note" id="imbalanceNote">No dataset loaded yet.</div>
+      </div>
+
+      <div class="card">
+        <h2>Step 4: Test a Prediction</h2>
+        <div class="form-grid" id="predictionForm"></div>
+        <div class="top-actions" style="margin-top:18px;">
+          <button class="btn-green" id="predictBtn" disabled>Run Prediction</button>
+        </div>
+        <div class="prediction-box" id="predictionOutput">Prediction outcome will appear here.</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+      <h2>Model Insights</h2>
+      <div class="grid-4">
+        <div class="card chart-card"><h3>Class Distribution</h3><canvas id="classChart" role="img" aria-label="Bar chart of class distribution in the loaded data"></canvas></div>
+        <div class="card chart-card"><h3>Training Loss by Epoch</h3><canvas id="lossChart" role="img" aria-label="Line chart of training loss and accuracy across epochs"></canvas></div>
+        <div class="card chart-card"><h3>Prediction Confidence</h3><canvas id="confidenceChart" role="img" aria-label="Bar chart of prediction confidence for each class"></canvas></div>
+        <div class="card chart-card"><h3>Per-Class Metrics</h3><canvas id="metricsChart" role="img" aria-label="Bar chart of precision, recall, F1, and accuracy"></canvas></div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <h3>Confusion Matrix</h3>
+          <div class="confusion-wrap">
+            <table class="confusion-table">
+              <caption class="visually-hidden">Confusion matrix comparing actual and predicted outcomes</caption>
+              <thead>
+                <tr>
+                  <th scope="col"></th>
+                  <th scope="col" id="cmColNeg">Pred Negative</th>
+                  <th scope="col" id="cmColPos">Pred Positive</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row" id="cmRowNeg">Actual Negative</th>
+                  <td class="cm-tn"><div class="cm-label">True Neg</div><div class="cm-value" id="cmTN">0</div></td>
+                  <td class="cm-fp"><div class="cm-label">False Pos</div><div class="cm-value" id="cmFP">0</div></td>
+                </tr>
+                <tr>
+                  <th scope="row" id="cmRowPos">Actual Positive</th>
+                  <td class="cm-fn"><div class="cm-label">False Neg</div><div class="cm-value" id="cmFN">0</div></td>
+                  <td class="cm-tp"><div class="cm-label">True Pos</div><div class="cm-value" id="cmTP">0</div></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="legend-note" id="cmLegend">Rows are actual outcomes and columns are predicted outcomes.</div>
+        </div>
+        <div class="card chart-card"><h3>Feature Profile</h3><canvas id="featureChart" role="img" aria-label="Radar chart of the current prediction's input values"></canvas></div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const DATASETS = {
+      churn: {
+        label: "Streaming Service Subscriptions",
+        description: "Predict whether a subscriber will stay or cancel based on usage and support history.",
+        features: [
+          {name:"Monthly_Spend_USD", type:"decimal", label:"Monthly Spend (USD)", default:12.50},
+          {name:"Hours_Watched_Per_Week", type:"decimal", label:"Hours Watched per Week", default:10},
+          {name:"Devices_Connected", type:"int", label:"Devices Connected", default:2},
+          {name:"Customer_Service_Tickets", type:"int", label:"Customer Service Tickets", default:1},
+          {name:"Using_Student_Discount", type:"bool", label:"Using Student Discount", default:false}
+        ],
+        target: "Account_Status",
+        positive: "Stay",
+        negative: "Cancel",
+        sampleCSV: `Monthly_Spend_USD,Hours_Watched_Per_Week,Devices_Connected,Customer_Service_Tickets,Using_Student_Discount,Account_Status
+9.78,5.35,2,1,True,Cancel
+11.20,22.10,5,4,False,Stay
+6.39,20.11,3,4,False,Stay
+16.73,8.75,5,2,False,Stay
+7.35,6.00,0,3,True,Cancel
+24.90,16.91,2,4,False,Stay
+11.49,6.75,0,1,False,Cancel
+8.56,2.61,2,4,True,Cancel
+16.96,12.22,2,3,False,Stay
+6.21,13.98,3,2,False,Cancel
+22.67,6.82,5,1,False,Stay
+27.81,7.21,3,2,False,Stay
+16.12,23.85,3,6,False,Cancel
+19.09,5.47,4,4,False,Cancel
+16.67,1.45,0,1,True,Cancel
+21.29,13.82,1,4,True,Stay
+11.86,1.85,2,3,True,Cancel
+9.27,20.16,1,3,True,Stay
+10.11,23.59,3,5,False,Stay
+10.48,21.39,0,3,False,Stay
+24.93,8.11,2,6,False,Cancel
+25.07,8.58,1,5,False,Cancel
+9.61,0.70,5,5,False,Cancel
+10.61,17.71,2,3,False,Stay
+3.55,20.69,0,4,False,Stay
+15.66,3.95,1,5,True,Cancel
+14.85,20.89,0,2,False,Stay
+25.98,5.86,2,3,False,Cancel
+8.49,1.07,1,3,False,Cancel
+8.05,12.67,3,4,False,Cancel
+16.64,19.32,0,4,False,Cancel
+20.31,7.36,4,4,False,Stay
+5.52,3.48,1,3,False,Cancel
+23.60,23.53,2,1,True,Stay
+7.08,14.35,0,1,False,Cancel
+16.65,22.65,0,6,False,Cancel
+25.78,13.55,3,0,False,Stay
+23.97,22.52,4,0,False,Stay
+25.62,22.01,5,3,False,Stay
+7.34,2.67,3,3,False,Cancel
+28.46,18.24,3,4,False,Stay
+12.81,21.36,2,6,False,Cancel
+22.33,19.69,4,1,False,Stay
+12.32,23.68,4,0,False,Stay
+3.05,13.34,3,6,False,Cancel
+16.68,14.38,0,3,False,Cancel
+10.58,6.44,0,0,False,Cancel
+11.97,3.23,4,5,False,Cancel
+28.28,6.86,0,3,False,Cancel
+28.24,4.06,3,0,False,Cancel
+28.93,9.59,1,5,False,Cancel
+11.04,5.52,5,5,False,Cancel
+4.22,16.71,0,3,False,Cancel
+11.99,9.16,5,2,False,Stay
+18.64,16.09,5,6,False,Cancel
+19.08,24.00,0,1,False,Stay
+3.04,8.14,3,4,False,Cancel
+26.74,3.00,4,4,False,Cancel
+3.45,0.55,2,3,False,Cancel
+25.92,24.37,4,3,False,Stay
+28.50,23.98,3,0,True,Stay
+13.74,13.71,4,4,False,Stay
+3.67,16.21,4,4,True,Stay
+27.11,24.23,4,5,False,Stay
+9.23,21.73,1,2,True,Stay
+5.71,17.95,0,2,True,Stay
+11.26,22.37,1,4,False,Stay
+13.31,15.75,5,4,False,Stay
+14.79,20.78,3,3,True,Stay
+22.79,8.92,5,2,True,Cancel
+7.15,8.46,1,5,False,Cancel
+14.55,21.13,2,1,True,Stay
+24.65,8.08,5,5,True,Stay
+18.47,19.11,5,2,False,Stay
+8.68,19.10,4,4,False,Stay
+24.15,16.78,4,1,False,Stay
+23.61,5.70,0,1,False,Stay
+23.73,18.63,0,4,False,Stay
+10.42,3.27,0,0,False,Cancel
+10.98,6.49,3,0,False,Stay
+29.14,13.13,1,6,False,Cancel
+24.75,15.84,3,0,True,Stay
+19.88,12.13,3,3,True,Stay
+6.54,1.42,1,0,True,Cancel
+17.39,4.70,0,1,True,Stay
+4.95,20.94,4,5,False,Stay
+11.79,12.59,1,0,False,Cancel
+26.09,22.72,1,3,False,Stay
+27.28,13.46,2,6,True,Cancel
+27.26,16.49,5,2,False,Stay
+28.59,9.97,3,4,False,Cancel
+26.61,21.97,1,2,False,Stay
+22.88,17.25,1,4,True,Cancel
+9.80,22.83,5,4,False,Stay
+21.99,4.99,2,1,False,Stay
+13.30,4.13,1,5,False,Cancel
+3.67,12.86,0,2,False,Cancel
+23.05,23.66,0,3,False,Stay
+6.80,24.17,5,3,True,Stay
+23.70,20.45,3,1,False,Stay
+25.28,18.35,3,1,False,Stay
+6.59,14.65,4,5,False,Cancel
+5.04,19.60,0,5,True,Stay
+20.67,18.67,4,4,True,Stay
+17.41,4.47,5,0,True,Stay
+24.09,23.37,2,2,False,Stay
+18.62,21.09,5,5,False,Stay
+20.17,5.09,3,1,False,Stay
+28.51,7.78,0,1,False,Cancel
+20.85,2.75,1,3,False,Cancel
+11.52,16.88,1,5,False,Cancel
+25.47,4.16,1,4,False,Cancel
+12.75,2.78,0,1,False,Cancel
+17.33,0.19,5,1,True,Stay
+20.78,18.65,0,3,False,Cancel
+15.97,4.28,0,6,False,Cancel
+17.21,3.01,3,5,False,Cancel
+9.86,5.36,1,6,False,Cancel
+23.82,16.56,2,6,True,Cancel
+7.61,18.86,5,6,True,Stay
+19.96,1.25,2,4,False,Cancel
+17.38,5.16,3,1,True,Cancel
+29.74,0.30,3,2,False,Cancel
+26.93,18.00,4,2,False,Stay
+21.91,9.92,3,2,False,Stay
+3.36,18.78,0,1,False,Stay
+23.96,22.17,5,1,False,Stay
+12.49,6.35,3,3,False,Cancel
+15.26,13.66,0,2,False,Stay
+9.59,16.10,3,5,False,Cancel
+28.39,19.99,1,5,False,Stay
+12.50,6.93,3,5,True,Cancel
+5.53,6.59,3,4,False,Cancel
+9.42,17.90,3,0,False,Stay
+29.72,19.63,5,0,True,Stay
+12.50,4.51,5,4,False,Cancel
+17.77,19.00,2,2,False,Stay
+22.36,17.31,2,4,False,Cancel
+24.84,17.92,3,4,True,Stay
+29.25,17.10,1,4,True,Stay`
+      },
+      login: {
+        label: "Cybersecurity: Login Attempt Review",
+        description: "Predict whether a login attempt looks suspicious based on attempt details.",
+        features: [
+          {name:"Failed_Login_Attempts", type:"int", label:"Failed Login Attempts", default:1},
+          {name:"Login_Hour", type:"int", label:"Login Hour (0-23)", default:14},
+          {name:"Is_New_Device", type:"bool", label:"New Device", default:false},
+          {name:"Used_VPN", type:"bool", label:"Used VPN", default:false},
+          {name:"Days_Since_Password_Change", type:"int", label:"Days Since Password Change", default:60}
+        ],
+        target: "Login_Outcome",
+        positive: "Suspicious",
+        negative: "Legitimate",
+        sampleCSV: `Failed_Login_Attempts,Login_Hour,Is_New_Device,Used_VPN,Days_Since_Password_Change,Login_Outcome
+7,18,True,False,190,Suspicious
+2,3,False,False,184,Suspicious
+4,8,False,True,14,Legitimate
+2,21,True,True,272,Legitimate
+2,2,False,False,40,Legitimate
+0,11,True,True,190,Legitimate
+2,16,True,False,322,Legitimate
+7,16,False,False,271,Suspicious
+5,14,False,True,353,Suspicious
+6,5,False,False,231,Suspicious
+2,9,True,True,362,Legitimate
+1,4,True,False,104,Legitimate
+6,13,True,False,302,Suspicious
+5,22,False,True,237,Legitimate
+4,8,True,True,93,Legitimate
+3,16,False,True,394,Suspicious
+3,1,True,True,86,Legitimate
+1,23,False,False,155,Legitimate
+2,21,False,True,299,Legitimate
+7,8,False,False,235,Suspicious
+6,3,False,True,237,Suspicious
+1,3,False,True,395,Suspicious
+5,17,True,False,122,Suspicious
+4,19,False,True,349,Legitimate
+7,22,False,False,397,Suspicious
+2,1,False,True,22,Legitimate
+4,10,False,True,73,Legitimate
+8,7,False,False,55,Suspicious
+5,7,False,True,273,Legitimate
+5,23,True,True,17,Legitimate
+0,3,False,False,378,Legitimate
+3,20,True,True,239,Suspicious
+4,16,False,False,355,Suspicious
+5,18,True,True,281,Suspicious
+2,12,False,True,177,Legitimate
+7,13,False,True,96,Legitimate
+2,7,True,False,243,Legitimate
+6,14,False,True,190,Legitimate
+1,0,False,True,157,Legitimate
+7,20,False,False,101,Suspicious
+3,1,True,True,278,Suspicious
+3,20,True,False,168,Suspicious
+7,23,False,False,7,Suspicious
+8,10,True,False,199,Suspicious
+1,13,True,False,228,Suspicious
+5,11,True,True,394,Legitimate
+7,15,True,True,371,Suspicious
+6,22,True,False,363,Suspicious
+6,23,True,True,39,Suspicious
+1,9,True,False,259,Legitimate
+1,2,True,False,358,Legitimate
+4,21,False,True,238,Legitimate
+2,17,True,True,6,Legitimate
+6,9,True,False,361,Suspicious
+0,4,False,False,242,Legitimate
+0,16,False,True,226,Legitimate
+2,11,False,False,90,Legitimate
+1,14,False,False,165,Legitimate
+0,12,False,False,111,Legitimate
+2,17,False,False,266,Legitimate
+1,5,False,True,207,Legitimate
+4,15,True,True,1,Legitimate
+1,0,True,False,341,Suspicious
+4,14,True,True,386,Suspicious
+8,11,False,True,235,Suspicious
+3,10,True,False,333,Legitimate
+3,2,True,False,159,Suspicious
+2,7,False,False,113,Legitimate
+1,1,False,True,273,Legitimate
+2,13,True,False,312,Suspicious
+5,5,False,True,54,Legitimate
+3,23,True,True,14,Legitimate
+1,9,False,False,367,Legitimate
+2,8,False,True,170,Legitimate
+6,18,False,False,80,Suspicious
+6,7,True,False,39,Suspicious
+2,16,False,False,85,Legitimate
+4,11,True,True,260,Legitimate
+4,22,False,True,159,Legitimate
+1,17,False,True,212,Legitimate
+0,9,False,True,389,Legitimate
+3,0,False,True,143,Legitimate
+4,9,False,False,79,Suspicious
+8,18,False,False,234,Suspicious
+7,14,False,False,393,Suspicious
+1,14,False,True,103,Legitimate
+8,0,False,False,39,Suspicious
+7,12,False,False,220,Suspicious
+7,0,False,False,93,Suspicious
+1,10,True,True,398,Legitimate
+2,2,False,True,114,Legitimate
+4,17,True,False,288,Suspicious
+4,15,True,True,233,Legitimate
+7,20,True,True,6,Suspicious
+6,23,False,False,92,Suspicious
+5,0,False,True,387,Suspicious
+7,9,True,False,274,Suspicious
+0,14,False,False,161,Legitimate
+7,5,False,False,370,Suspicious
+0,18,False,False,379,Legitimate
+4,21,True,True,62,Legitimate
+2,11,False,True,26,Legitimate
+4,23,False,True,329,Suspicious
+6,10,False,True,174,Suspicious
+5,21,False,True,209,Legitimate
+4,8,False,False,170,Suspicious
+2,0,True,True,161,Legitimate
+2,15,True,True,80,Legitimate
+8,14,False,False,334,Suspicious
+8,5,False,False,242,Suspicious
+4,12,True,True,94,Suspicious
+7,15,False,False,369,Suspicious
+4,22,False,True,198,Legitimate
+7,1,False,True,239,Suspicious
+5,15,False,False,399,Suspicious
+3,22,False,True,301,Legitimate
+0,12,True,False,53,Legitimate
+6,2,False,True,28,Suspicious
+0,17,True,True,279,Legitimate
+3,3,False,False,345,Suspicious
+5,19,True,False,155,Suspicious
+3,6,True,False,241,Legitimate
+5,7,False,False,391,Legitimate
+8,4,True,False,291,Suspicious
+5,18,False,True,97,Legitimate
+8,15,False,False,271,Suspicious
+7,22,False,True,293,Legitimate
+5,3,True,True,49,Suspicious
+6,8,True,True,4,Legitimate
+8,16,False,False,368,Suspicious
+0,12,False,False,356,Legitimate
+3,16,True,True,358,Legitimate
+5,17,False,False,171,Suspicious
+6,7,False,False,103,Legitimate
+8,13,False,True,269,Suspicious
+5,20,False,True,0,Suspicious
+8,16,False,False,350,Suspicious
+0,19,False,False,245,Legitimate
+0,0,False,False,253,Legitimate
+4,22,False,False,265,Legitimate`
+      },
+      shipment: {
+        label: "Logistics: Shipment Delay Risk",
+        description: "Predict whether a shipment is likely to be delayed based on route and handling details.",
+        features: [
+          {name:"Distance_Miles", type:"decimal", label:"Distance (Miles)", default:400},
+          {name:"Number_of_Stops", type:"int", label:"Number of Stops", default:2},
+          {name:"Weather_Delay_Hours", type:"decimal", label:"Weather Delay (Hours)", default:1},
+          {name:"Customs_Inspection", type:"bool", label:"Customs Inspection", default:false},
+          {name:"Priority_Shipping", type:"bool", label:"Priority Shipping", default:false}
+        ],
+        target: "Delivery_Status",
+        positive: "Delayed",
+        negative: "OnTime",
+        sampleCSV: `Distance_Miles,Number_of_Stops,Weather_Delay_Hours,Customs_Inspection,Priority_Shipping,Delivery_Status
+1500.45,6,4.71,False,False,Delayed
+1922.86,6,0.19,False,False,Delayed
+1173.05,1,5.16,False,False,OnTime
+1911.83,4,8.54,True,False,Delayed
+782.73,3,9.06,True,False,Delayed
+1750.15,4,9.33,False,False,Delayed
+192.71,0,4.75,False,True,OnTime
+398.25,1,8.69,False,False,OnTime
+1336.06,1,1.45,False,False,OnTime
+1844.16,6,9.46,True,False,Delayed
+225.33,1,10.30,False,False,OnTime
+1110.85,0,5.37,False,False,OnTime
+420.32,6,10.13,True,False,Delayed
+498.64,1,2.94,False,False,OnTime
+497.45,4,7.97,False,True,Delayed
+1829.14,6,7.80,False,False,Delayed
+793.33,0,6.45,True,False,OnTime
+65.14,3,3.50,True,True,OnTime
+1601.91,4,9.77,False,True,Delayed
+319.21,6,10.55,False,True,Delayed
+1335.56,3,6.91,True,False,Delayed
+369.06,1,2.03,True,True,OnTime
+148.07,6,8.27,True,False,Delayed
+1656.84,6,2.66,False,False,Delayed
+741.07,0,4.68,True,False,OnTime
+23.35,6,10.38,False,True,OnTime
+1220.80,1,10.01,False,True,Delayed
+1780.54,1,3.98,False,False,Delayed
+1134.56,4,0.02,False,True,OnTime
+197.84,5,10.27,True,False,Delayed
+1280.58,5,1.84,True,False,Delayed
+1883.74,1,5.98,False,True,Delayed
+1554.91,5,5.02,False,False,Delayed
+435.71,3,10.00,False,True,Delayed
+1195.75,4,10.28,False,False,Delayed
+407.07,3,9.89,False,False,OnTime
+194.14,1,10.30,True,True,Delayed
+1215.98,6,0.36,False,True,OnTime
+1040.58,6,2.52,True,False,Delayed
+1549.01,6,4.18,False,False,Delayed
+1084.95,2,5.13,False,False,OnTime
+401.81,6,3.68,False,True,OnTime
+898.56,6,2.39,True,True,Delayed
+1732.26,1,7.39,False,True,Delayed
+1992.65,2,0.22,False,False,OnTime
+721.38,5,2.17,True,False,Delayed
+1232.89,0,11.01,False,True,OnTime
+444.99,2,1.52,False,False,OnTime
+1362.19,2,2.77,False,False,OnTime
+1376.81,0,10.63,True,False,Delayed
+1316.78,2,10.91,True,True,Delayed
+802.07,0,0.10,False,False,OnTime
+1553.33,1,2.08,False,False,OnTime
+509.90,6,4.41,False,True,OnTime
+926.30,0,4.64,False,False,OnTime
+938.69,1,4.04,False,False,OnTime
+246.30,6,8.40,False,True,OnTime
+798.79,4,2.90,False,True,OnTime
+1381.75,4,5.73,False,False,Delayed
+197.73,6,6.21,False,True,Delayed
+700.93,3,5.97,False,True,Delayed
+1718.71,0,11.18,True,False,Delayed
+1689.66,5,1.27,False,False,OnTime
+252.89,2,4.57,True,True,OnTime
+1725.27,4,3.16,False,True,OnTime
+119.10,3,5.78,True,False,Delayed
+1256.73,1,0.79,False,True,OnTime
+169.45,2,9.02,True,False,Delayed
+1273.13,0,3.53,False,False,OnTime
+1081.77,6,3.58,False,False,Delayed
+1149.28,3,1.99,False,False,OnTime
+431.83,5,9.08,True,True,Delayed
+916.69,6,8.92,False,True,Delayed
+374.71,5,9.16,False,False,Delayed
+278.76,6,6.46,False,False,Delayed
+687.53,4,11.95,False,False,Delayed
+363.11,1,3.75,True,False,OnTime
+727.55,6,0.45,False,False,Delayed
+97.41,5,11.44,True,False,Delayed
+1660.79,4,11.62,True,True,Delayed
+187.73,1,11.46,False,False,OnTime
+548.49,2,11.56,False,True,OnTime
+1137.22,0,1.71,False,False,OnTime
+278.09,6,6.81,False,False,OnTime
+1009.91,0,4.20,True,False,OnTime
+43.75,3,0.36,True,True,OnTime
+1648.55,0,5.06,True,True,OnTime
+636.43,0,7.28,True,False,OnTime
+1825.90,4,4.94,False,False,Delayed
+1201.45,1,5.06,False,False,OnTime
+1247.06,1,7.41,False,False,Delayed
+1324.96,1,9.74,False,True,OnTime
+514.13,0,1.13,False,True,OnTime
+1137.84,6,11.89,False,False,Delayed
+437.69,3,0.50,True,False,OnTime
+40.35,3,5.48,True,False,OnTime
+1525.33,2,5.88,False,False,Delayed
+1917.40,1,2.60,False,True,OnTime
+340.16,2,0.45,True,False,OnTime
+250.76,1,0.21,True,False,OnTime
+100.65,2,1.64,False,False,OnTime
+1007.44,5,11.40,False,True,Delayed
+1392.38,6,4.11,False,True,Delayed
+1473.90,3,7.61,False,True,Delayed
+907.73,5,9.67,False,True,Delayed
+832.45,1,4.81,False,True,OnTime
+725.49,5,3.09,True,False,Delayed
+723.65,3,7.90,True,True,OnTime
+1609.99,6,4.21,True,False,Delayed
+425.79,6,1.36,False,False,OnTime
+371.03,2,0.74,True,False,OnTime
+1173.50,0,5.38,False,False,OnTime
+1207.81,1,0.05,False,False,OnTime
+1344.65,6,6.87,False,True,Delayed
+1354.93,6,0.40,True,True,Delayed
+953.61,1,11.97,False,True,OnTime
+672.46,1,2.85,False,True,OnTime
+994.05,5,10.49,False,True,Delayed
+1272.76,1,4.90,False,True,OnTime
+895.13,5,1.63,True,True,OnTime
+908.08,3,7.88,False,True,OnTime
+428.11,4,4.38,False,False,Delayed
+264.42,6,1.11,False,False,OnTime
+1824.61,3,1.56,False,True,OnTime
+544.70,6,9.28,False,True,Delayed
+367.51,4,3.69,False,False,OnTime
+1706.89,6,2.85,True,False,Delayed
+1341.33,5,6.99,False,False,Delayed
+303.28,4,4.67,False,False,OnTime
+1690.77,4,0.50,False,True,OnTime
+1328.15,0,8.34,False,True,OnTime
+426.34,0,9.77,False,False,OnTime
+251.33,4,7.30,False,False,OnTime
+1162.23,5,8.50,False,False,Delayed
+1161.05,0,3.62,False,False,OnTime
+528.40,4,3.74,False,True,OnTime
+1046.38,4,5.52,True,True,Delayed
+1742.87,1,4.22,False,False,Delayed
+1746.12,1,11.56,False,False,Delayed
+1910.28,4,3.79,True,True,Delayed`
+      },
+      health: {
+        label: "Healthcare: Patient Readmission Risk (synthetic teaching data)",
+        description: "Predict readmission risk using simplified, synthetic patient data. This is a teaching example only, not a clinical tool.",
+        features: [
+          {name:"Age", type:"int", label:"Age", default:55},
+          {name:"Length_of_Stay_Days", type:"int", label:"Length of Stay (Days)", default:4},
+          {name:"Number_of_Medications", type:"int", label:"Number of Medications", default:5},
+          {name:"Prior_Admissions_Past_Year", type:"int", label:"Prior Admissions (Past Year)", default:1},
+          {name:"Has_Chronic_Condition", type:"bool", label:"Has Chronic Condition", default:false}
+        ],
+        target: "Readmission_Status",
+        positive: "Readmitted",
+        negative: "NotReadmitted",
+        sampleCSV: `Age,Length_of_Stay_Days,Number_of_Medications,Prior_Admissions_Past_Year,Has_Chronic_Condition,Readmission_Status
+58,2,1,1,False,NotReadmitted
+44,3,1,4,True,NotReadmitted
+76,8,11,3,False,Readmitted
+38,7,3,0,False,NotReadmitted
+47,12,2,0,False,NotReadmitted
+45,10,3,2,False,NotReadmitted
+88,1,11,2,True,NotReadmitted
+76,12,8,0,True,Readmitted
+89,5,5,4,False,Readmitted
+67,13,8,5,False,Readmitted
+24,9,1,2,True,Readmitted
+39,12,10,3,False,Readmitted
+78,7,9,5,False,Readmitted
+27,11,6,0,False,NotReadmitted
+36,6,1,5,False,Readmitted
+86,12,10,1,False,Readmitted
+43,9,0,5,False,Readmitted
+78,1,0,3,True,Readmitted
+32,9,4,0,False,NotReadmitted
+78,5,12,5,False,Readmitted
+33,13,9,4,True,Readmitted
+36,12,4,0,True,NotReadmitted
+86,14,9,5,False,Readmitted
+46,7,2,1,False,NotReadmitted
+88,11,1,4,True,Readmitted
+80,11,6,5,True,Readmitted
+81,2,11,0,True,NotReadmitted
+21,5,5,4,True,Readmitted
+72,14,5,1,False,Readmitted
+42,11,0,0,False,NotReadmitted
+34,12,12,3,False,Readmitted
+66,3,1,1,False,NotReadmitted
+40,2,6,4,True,NotReadmitted
+71,1,4,2,False,NotReadmitted
+38,4,3,5,True,Readmitted
+72,11,0,0,False,NotReadmitted
+89,10,8,1,False,NotReadmitted
+70,12,9,4,False,Readmitted
+18,2,9,5,False,NotReadmitted
+28,4,1,5,False,NotReadmitted
+40,10,3,5,True,Readmitted
+49,2,10,3,False,NotReadmitted
+74,10,7,0,True,NotReadmitted
+44,9,12,2,False,NotReadmitted
+85,3,12,3,True,Readmitted
+70,5,6,0,False,NotReadmitted
+74,7,1,5,True,Readmitted
+45,1,9,4,True,Readmitted
+58,1,3,2,True,NotReadmitted
+48,10,9,4,True,Readmitted
+52,4,7,0,False,NotReadmitted
+54,1,2,2,False,Readmitted
+51,13,7,4,True,Readmitted
+24,6,6,5,False,Readmitted
+18,5,1,5,False,NotReadmitted
+81,3,10,0,False,NotReadmitted
+38,12,11,0,False,NotReadmitted
+80,3,12,2,True,NotReadmitted
+55,5,5,2,True,NotReadmitted
+68,5,5,3,False,NotReadmitted
+23,10,8,0,False,Readmitted
+51,1,9,2,True,Readmitted
+51,9,0,1,False,NotReadmitted
+46,8,8,2,False,NotReadmitted
+64,2,5,4,False,NotReadmitted
+18,2,5,5,False,NotReadmitted
+72,13,4,1,False,Readmitted
+27,5,10,0,False,Readmitted
+36,13,3,3,False,Readmitted
+42,14,10,0,False,NotReadmitted
+25,3,6,0,True,NotReadmitted
+27,14,1,5,False,Readmitted
+70,11,3,0,True,NotReadmitted
+50,8,7,5,False,Readmitted
+25,12,12,2,False,Readmitted
+20,7,0,2,False,NotReadmitted
+41,1,1,2,False,NotReadmitted
+83,14,9,4,True,Readmitted
+40,10,8,1,False,NotReadmitted
+68,1,11,4,True,NotReadmitted
+74,7,2,5,False,Readmitted
+79,4,6,2,False,NotReadmitted
+21,3,4,4,False,NotReadmitted
+85,2,12,1,True,NotReadmitted
+60,1,9,3,True,Readmitted
+50,4,5,3,True,Readmitted
+44,1,1,3,False,NotReadmitted
+81,14,10,1,True,Readmitted
+31,9,1,3,False,Readmitted
+33,14,4,4,True,Readmitted
+75,14,6,3,False,Readmitted
+68,4,2,0,False,NotReadmitted
+73,14,11,3,False,Readmitted
+58,8,11,4,True,Readmitted
+24,2,1,0,False,NotReadmitted
+56,12,5,2,True,Readmitted
+41,12,2,0,False,NotReadmitted
+66,12,7,4,True,Readmitted
+61,4,0,3,True,Readmitted
+76,6,9,1,True,NotReadmitted
+53,13,12,4,False,Readmitted
+67,7,4,4,True,Readmitted
+56,10,0,1,True,Readmitted
+86,1,7,0,True,NotReadmitted
+88,4,8,2,False,Readmitted
+73,6,10,1,False,NotReadmitted
+18,12,10,4,True,Readmitted
+70,14,3,5,True,Readmitted
+58,4,4,5,False,Readmitted
+87,8,10,3,False,Readmitted
+27,10,11,3,False,Readmitted
+32,9,6,3,False,Readmitted
+42,14,8,2,True,Readmitted
+86,5,2,1,False,NotReadmitted
+47,14,4,4,False,Readmitted
+22,14,0,4,True,Readmitted
+26,4,8,4,False,Readmitted
+18,5,10,3,False,NotReadmitted
+32,11,4,4,True,Readmitted
+54,10,10,4,False,Readmitted
+89,11,11,0,True,Readmitted
+87,4,9,2,True,Readmitted
+89,12,11,2,True,Readmitted
+45,8,1,4,True,Readmitted
+79,14,12,1,True,Readmitted
+35,6,5,3,False,NotReadmitted
+58,13,4,0,True,NotReadmitted
+73,6,10,5,True,Readmitted
+29,3,2,0,False,NotReadmitted
+24,1,3,5,False,NotReadmitted
+42,12,5,2,False,NotReadmitted
+89,11,1,0,True,NotReadmitted
+34,6,2,2,False,NotReadmitted
+61,12,8,2,False,NotReadmitted
+52,12,2,1,False,NotReadmitted
+82,2,2,2,True,NotReadmitted
+53,3,3,1,False,NotReadmitted
+75,12,10,3,False,Readmitted
+19,9,7,1,True,NotReadmitted
+23,12,5,3,False,Readmitted`
+      },
+      equipment: {
+        label: "Maintenance: Equipment Failure Risk",
+        description: "Predict whether equipment is at risk of failure based on usage and maintenance history.",
+        features: [
+          {name:"Operating_Hours", type:"decimal", label:"Operating Hours", default:1500},
+          {name:"Equipment_Age_Years", type:"decimal", label:"Equipment Age (Years)", default:4},
+          {name:"Missed_Maintenance_Checks", type:"int", label:"Missed Maintenance Checks", default:1},
+          {name:"Harsh_Environment", type:"bool", label:"Harsh Environment", default:false},
+          {name:"Prior_Repairs", type:"int", label:"Prior Repairs", default:2}
+        ],
+        target: "Equipment_Status",
+        positive: "Failure",
+        negative: "Operational",
+        sampleCSV: `Operating_Hours,Equipment_Age_Years,Missed_Maintenance_Checks,Harsh_Environment,Prior_Repairs,Equipment_Status
+668.17,8.45,6,True,6,Failure
+753.91,8.23,1,True,7,Operational
+432.65,0.49,0,True,4,Operational
+1407.66,2.08,1,True,3,Operational
+2252.08,3.72,4,True,2,Operational
+1785.47,12.79,3,False,1,Operational
+465.39,9.83,2,True,5,Operational
+2621.78,7.06,1,True,5,Failure
+952.58,12.97,3,False,1,Operational
+409.03,13.72,5,True,3,Failure
+3508.68,13.18,4,True,7,Failure
+2615.54,4.55,2,False,4,Operational
+3753.24,2.77,3,True,8,Failure
+1109.76,2.58,3,False,3,Operational
+1043.94,12.20,6,False,1,Failure
+2704.15,11.90,0,True,1,Operational
+4323.93,1.69,3,False,2,Operational
+821.07,2.56,0,False,6,Operational
+471.46,5.06,1,True,5,Operational
+1984.51,8.13,0,True,3,Operational
+4276.56,4.97,1,True,4,Failure
+3425.25,8.68,0,False,0,Operational
+2714.01,8.82,0,True,5,Operational
+1365.89,9.91,3,False,2,Operational
+2764.07,12.51,4,False,1,Failure
+1128.00,11.89,2,False,4,Operational
+3821.44,8.09,1,False,2,Operational
+258.73,7.03,5,True,7,Operational
+1725.30,7.77,1,False,3,Operational
+3849.92,11.77,0,False,1,Operational
+2708.46,4.01,3,False,6,Failure
+4748.03,2.80,0,False,3,Operational
+1998.15,9.14,5,True,7,Failure
+3959.60,6.95,2,False,4,Failure
+3141.91,2.93,5,False,3,Operational
+766.28,11.62,3,False,6,Failure
+2512.00,5.74,0,True,3,Operational
+1069.95,2.81,2,False,3,Operational
+4612.55,7.49,1,True,7,Failure
+833.65,5.58,4,True,6,Failure
+1816.60,8.67,3,True,7,Failure
+865.86,5.16,3,True,8,Failure
+3715.23,6.58,2,True,7,Failure
+3910.79,11.72,1,False,3,Operational
+4399.46,4.60,6,True,7,Failure
+4820.12,0.33,1,True,2,Operational
+478.16,6.08,2,False,5,Operational
+4714.64,10.12,4,True,8,Failure
+1991.42,9.40,0,False,0,Operational
+1239.89,1.78,6,False,1,Operational
+318.52,6.70,4,False,2,Operational
+4469.26,6.88,3,True,3,Failure
+1818.97,11.73,5,False,1,Failure
+596.16,13.39,6,True,2,Failure
+4860.46,6.68,0,True,5,Operational
+2466.85,0.94,5,True,1,Operational
+3424.98,12.69,1,True,5,Failure
+3358.34,0.27,2,False,7,Operational
+1496.87,10.74,5,False,5,Failure
+1143.52,2.42,4,False,7,Failure
+3026.61,2.06,3,False,0,Operational
+3260.72,9.99,1,False,4,Failure
+2252.89,1.48,0,True,4,Operational
+3291.27,14.18,2,False,7,Operational
+3456.88,9.81,6,False,4,Failure
+115.45,12.62,3,False,6,Operational
+1827.41,12.02,6,False,3,Failure
+4031.92,10.92,5,False,4,Failure
+4198.74,8.10,5,True,8,Failure
+1691.58,8.38,3,True,8,Failure
+1202.42,2.02,4,True,2,Operational
+2527.02,6.84,6,True,2,Failure
+1643.49,8.88,3,False,1,Operational
+728.32,10.59,0,True,2,Operational
+2575.05,5.62,5,True,2,Failure
+2844.95,3.61,5,True,5,Failure
+4055.30,9.15,1,False,1,Operational
+988.78,13.68,3,False,1,Operational
+1637.74,10.55,4,False,8,Failure
+2126.74,6.98,1,False,3,Operational
+1593.19,0.91,1,False,0,Operational
+1239.45,9.29,0,False,8,Operational
+3838.55,3.96,6,True,7,Failure
+2639.09,4.82,4,False,1,Operational
+1956.79,9.54,4,True,0,Failure
+4440.26,0.32,6,False,2,Operational
+3164.41,10.14,6,False,7,Failure
+1679.13,5.78,5,False,8,Failure
+2168.45,9.59,3,False,1,Operational
+1570.05,3.54,2,True,3,Operational
+3410.55,1.09,5,False,1,Operational
+3385.57,6.50,5,True,7,Failure
+4285.07,4.77,4,False,2,Failure
+4516.29,0.81,2,False,5,Operational
+1304.94,1.86,6,False,6,Failure
+4575.21,12.04,2,False,7,Failure
+4098.53,13.61,1,True,0,Failure
+661.13,5.29,3,False,5,Operational
+2003.65,2.08,1,True,6,Operational
+2566.98,7.73,2,True,0,Operational
+3691.04,3.57,0,False,8,Operational
+1997.26,6.35,0,False,6,Operational
+1794.86,7.88,2,False,2,Operational
+2228.52,7.88,3,False,1,Operational
+3927.71,11.53,2,False,2,Operational
+1943.02,8.48,0,True,0,Operational
+1422.01,7.47,6,False,2,Operational
+4655.22,14.13,3,True,6,Failure
+969.93,2.23,1,False,6,Operational
+3724.16,6.48,3,True,5,Failure
+3253.48,2.15,3,True,5,Failure
+1309.23,4.37,2,False,6,Operational
+2102.36,11.58,3,False,7,Failure
+4541.69,7.06,3,True,4,Failure
+3148.56,9.94,1,False,5,Failure
+3162.48,13.69,6,True,8,Failure
+563.11,12.51,6,False,1,Failure
+1857.24,6.66,3,True,3,Failure
+4818.11,5.77,1,False,4,Operational
+4777.62,3.18,0,False,5,Operational
+690.47,2.64,6,False,1,Operational
+1228.29,8.07,1,True,4,Operational
+4937.44,7.35,4,True,7,Failure
+397.07,9.38,4,True,5,Operational
+2978.03,2.34,0,False,7,Operational
+3294.18,8.48,6,False,0,Failure
+866.73,5.31,0,True,0,Operational
+1253.53,1.95,0,True,6,Operational
+612.79,13.78,3,True,2,Failure
+307.47,13.53,1,False,7,Failure
+2726.86,0.81,4,False,8,Operational
+1452.52,6.62,3,False,2,Operational
+108.68,3.10,6,True,7,Failure
+1261.62,13.29,3,True,7,Failure
+3775.17,9.07,4,True,1,Failure
+783.26,1.18,4,False,3,Operational
+1764.70,1.78,0,True,5,Operational
+4551.77,11.98,2,False,6,Failure
+4649.20,9.61,1,True,8,Failure
+1115.81,4.31,3,False,7,Operational`
+      }
+    };
+
+    let activeKey = "churn";
+    let rawRows = [];
+    let model = null;
+    let minTensor = null;
+    let maxTensor = null;
+    let testSet = null;
+    let classCounts = { pos: 0, neg: 0 };
+    let charts = {};
+
+    function activeConfig() { return DATASETS[activeKey]; }
+
+    function fieldType(field) {
+      const f = activeConfig().features.find(x => x.name === field);
+      return f ? f.type : "decimal";
+    }
+
+    function coerceField(field, value) {
+      const type = fieldType(field);
+      const raw = String(value).trim();
+      if (type === "bool") return raw.toLowerCase() === "true";
+      if (type === "int") return Math.max(0, Math.round(Number(raw) || 0));
+      const num = Number(raw);
+      return Number.isFinite(num) ? num : raw;
+    }
+
+    function toModelNumber(field, value) {
+      const type = fieldType(field);
+      if (type === "bool") return value ? 1 : 0;
+      if (type === "int") return Math.round(Number(value) || 0);
+      const num = Number(value);
+      return Number.isFinite(num) ? num : 0;
+    }
+
+    function formatValue(field, value) {
+      const type = fieldType(field);
+      if (type === "bool") return value ? "true" : "false";
+      if (type === "int") return String(Math.round(Number(value) || 0));
+      if (typeof value === "number") return Number(value).toFixed(2);
+      return String(value);
+    }
+
+    function labelToInt(v) {
+      return String(v).trim() === activeConfig().positive ? 1 : 0;
+    }
+
+    function intToLabel(v) {
+      return v === 1 ? activeConfig().positive : activeConfig().negative;
+    }
+
+    function featureNames() { return activeConfig().features.map(f => f.name); }
+    function targetName() { return activeConfig().target; }
+
+    function renderDatasetChrome() {
+      const cfg = activeConfig();
+      document.getElementById("datasetDesc").textContent = cfg.description;
+      document.getElementById("expectedColumns").textContent =
+        "Expected columns: " + featureNames().join(", ") + ", " + targetName() + ".";
+      document.getElementById("posClassLabel").textContent = cfg.positive;
+      document.getElementById("negClassLabel").textContent = cfg.negative;
+      document.getElementById("cmColNeg").textContent = "Pred " + cfg.negative;
+      document.getElementById("cmColPos").textContent = "Pred " + cfg.positive;
+      document.getElementById("cmRowNeg").textContent = "Actual " + cfg.negative;
+      document.getElementById("cmRowPos").textContent = "Actual " + cfg.positive;
+      document.getElementById("cmLegend").textContent =
+        "Rows are actual outcomes and columns are predicted outcomes. " + cfg.positive +
+        " is treated as the positive class, so True Pos means actual " + cfg.positive +
+        " predicted as " + cfg.positive + ", and True Neg means actual " + cfg.negative +
+        " predicted as " + cfg.negative + ".";
+      renderPredictionForm();
+    }
+
+    function renderPredictionForm() {
+      const cfg = activeConfig();
+      const grid = document.getElementById("predictionForm");
+      grid.innerHTML = cfg.features.map(f => {
+        if (f.type === "bool") {
+          return `<div class="field"><label for="${f.name}">${f.label}</label>
+            <select id="${f.name}">
+              <option value="false"${f.default ? "" : " selected"}>False</option>
+              <option value="true"${f.default ? " selected" : ""}>True</option>
+            </select></div>`;
+        }
+        const step = f.type === "int" ? "1" : "0.01";
+        const min = f.type === "int" ? ' min="0"' : "";
+        return `<div class="field"><label for="${f.name}">${f.label}</label>
+          <input id="${f.name}" type="number" step="${step}"${min} value="${f.default}" /></div>`;
+      }).join("");
+    }
+
+    function resetForNewDataset() {
+      rawRows = [];
+      model = null;
+      minTensor = null;
+      maxTensor = null;
+      testSet = null;
+      classCounts = { pos: 0, neg: 0 };
+      document.getElementById("datasetStatus").textContent = "Choose to load sample data or upload your own CSV.";
+      document.getElementById("previewTable").innerHTML = '<caption class="visually-hidden">Preview of the first rows of loaded data</caption>';
+      document.getElementById("trainingInfo").textContent = "Load a dataset first to enable training.";
+      document.getElementById("trainStatus").textContent = "Model not trained.";
+      document.getElementById("metricRows").textContent = "0";
+      document.getElementById("metricPos").textContent = "0";
+      document.getElementById("metricNeg").textContent = "0";
+      document.getElementById("metricAccuracy").textContent = "0.00";
+      document.getElementById("imbalanceNote").textContent = "No dataset loaded yet.";
+      document.getElementById("predictionOutput").textContent = "Prediction outcome will appear here.";
+      document.getElementById("trainBtn").disabled = true;
+      document.getElementById("saveBtn").disabled = true;
+      document.getElementById("predictBtn").disabled = true;
+      resetConfusionTable();
+      renderClassChart();
+      renderEmptyCharts();
+    }
+
+    document.getElementById("datasetSelect").addEventListener("change", (e) => {
+      activeKey = e.target.value;
+      renderDatasetChrome();
+      resetForNewDataset();
+    });
+
+    function parseCSV(text) {
+      const lines = text.trim().split(/\r?\n/).filter(Boolean);
+      const headers = lines[0].split(",").map(h => h.trim());
+      return lines.slice(1).map(line => {
+        const values = line.split(",").map(v => v.trim());
+        const obj = {};
+        headers.forEach((h, i) => obj[h] = coerceField(h, values[i]));
+        return obj;
+      });
+    }
+
+    function updatePreview(rows) {
+      const table = document.getElementById("previewTable");
+      if (!rows.length) { table.innerHTML = ""; return; }
+      const headers = Object.keys(rows[0]);
+      const caption = '<caption class="visually-hidden">Preview of the first 12 rows of loaded data</caption>';
+      const head = `<thead><tr>${headers.map(h => `<th scope="col">${h}</th>`).join("")}</tr></thead>`;
+      const bodyRows = rows.slice(0, 12).map(r => `<tr>${headers.map(h => `<td>${formatValue(h, r[h])}</td>`).join("")}</tr>`).join("");
+      table.innerHTML = caption + head + `<tbody>${bodyRows}</tbody>`;
+    }
+
+    function summarizeData(rows) {
+      const cfg = activeConfig();
+      classCounts = { pos: 0, neg: 0 };
+      rows.forEach(r => {
+        if (labelToInt(r[targetName()]) === 1) classCounts.pos++; else classCounts.neg++;
+      });
+      document.getElementById("metricRows").textContent = rows.length;
+      document.getElementById("metricPos").textContent = classCounts.pos;
+      document.getElementById("metricNeg").textContent = classCounts.neg;
+      const ratio = rows.length ? (classCounts.pos / rows.length * 100).toFixed(1) : "0.0";
+      document.getElementById("imbalanceNote").textContent =
+        `Class balance note: ${classCounts.pos} of ${rows.length} rows are "${cfg.positive}" (${ratio}%).`;
+      document.getElementById("datasetStatus").textContent =
+        `Loaded ${rows.length} rows for "${cfg.label}." Target column: ${targetName()}.`;
+      document.getElementById("trainingInfo").textContent =
+        `Ready to train on ${featureNames().length} input features. Click Train Neural Network to begin.`;
+      document.getElementById("trainBtn").disabled = false;
+      renderClassChart();
+      renderEmptyCharts();
+      resetConfusionTable();
+    }
+
+    function destroyChart(name) { if (charts[name]) charts[name].destroy(); }
+    function baseChart(ctx, cfg) { return new Chart(ctx, cfg); }
+    function varColor(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+    function renderClassChart() {
+      const cfg = activeConfig();
+      destroyChart("classChart");
+      charts.classChart = baseChart(document.getElementById("classChart"), {
+        type: "bar",
+        data: {
+          labels: [cfg.negative, cfg.positive],
+          datasets: [{ label: "Count", data: [classCounts.neg, classCounts.pos],
+            backgroundColor: [varColor("--orange"), varColor("--blue")] }]
+        },
+        options: { responsive: true, plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, title: { display: true, text: "Count" }, ticks: { precision: 0 } } } }
+      });
+    }
+
+    function renderEmptyCharts() {
+      const cfg = activeConfig();
+      ["lossChart","confidenceChart","metricsChart","featureChart"].forEach(id => destroyChart(id));
+      charts.lossChart = baseChart(document.getElementById("lossChart"), {
+        type: "line",
+        data: { labels: [], datasets: [{ label: "Loss", data: [], borderColor: varColor("--blue"), backgroundColor: "rgba(47,128,237,.15)", fill: true, tension: .25 }] },
+        options: { responsive: true, scales: { y: { beginAtZero: true } } }
+      });
+      charts.confidenceChart = baseChart(document.getElementById("confidenceChart"), {
+        type: "bar",
+        data: { labels: [cfg.negative, cfg.positive], datasets: [{ label: "Probability", data: [0,0], backgroundColor: [varColor("--red"), varColor("--green")] }] },
+        options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 1 } } }
+      });
+      charts.metricsChart = baseChart(document.getElementById("metricsChart"), {
+        type: "bar",
+        data: { labels: [`Precision-${cfg.positive}`, `Recall-${cfg.positive}`, `F1-${cfg.positive}`, "Accuracy"],
+          datasets: [{ label: "Score", data: [0,0,0,0], backgroundColor: ["#8e44ad","#16a085","#d35400",varColor("--blue")] }] },
+        options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 1 } } }
+      });
+      charts.featureChart = baseChart(document.getElementById("featureChart"), {
+        type: "radar",
+        data: { labels: featureNames(), datasets: [{ label: "Input profile", data: featureNames().map(()=>0), borderColor: "#16a085", backgroundColor: "rgba(22,160,133,.2)" }] },
+        options: { responsive: true, scales: { r: { beginAtZero: true, pointLabels: { font: { size: 11 } } } } }
+      });
+    }
+
+    function resetConfusionTable() {
+      ["cmTN","cmFP","cmFN","cmTP"].forEach(id => document.getElementById(id).textContent = "0");
+    }
+
+    function normalizeTensor(tensor) {
+      return tensor.sub(minTensor).div(maxTensor.sub(minTensor).add(1e-7));
+    }
+
+    function prepareTensors(rows) {
+      const feats = rows.map(r => featureNames().map(f => toModelNumber(f, r[f])));
+      const labels = rows.map(r => labelToInt(r[targetName()]));
+      const indices = tf.util.createShuffledIndices(feats.length);
+      const shuffledX = Array.from(indices).map(i => feats[i]);
+      const shuffledY = Array.from(indices).map(i => labels[i]);
+      const testSize = Math.max(1, Math.floor(feats.length * 0.2));
+      const xTest = shuffledX.slice(0, testSize);
+      const yTest = shuffledY.slice(0, testSize);
+      const xTrain = shuffledX.slice(testSize);
+      const yTrain = shuffledY.slice(testSize);
+      const trainTensor = tf.tensor2d(xTrain);
+      minTensor = trainTensor.min(0);
+      maxTensor = trainTensor.max(0);
+      const xTrainNorm = normalizeTensor(trainTensor);
+      const xTestNorm = normalizeTensor(tf.tensor2d(xTest));
+      return { xTrain: xTrainNorm, yTrain: tf.tensor2d(yTrain, [yTrain.length, 1]), xTest: xTestNorm, yTest };
+    }
+
+    function buildModel(inputDim) {
+      const m = tf.sequential();
+      m.add(tf.layers.dense({ inputShape: [inputDim], units: 16, activation: "relu" }));
+      m.add(tf.layers.dense({ units: 8, activation: "relu" }));
+      m.add(tf.layers.dense({ units: 1, activation: "sigmoid" }));
+      m.compile({ optimizer: tf.train.adam(0.01), loss: "binaryCrossentropy", metrics: ["accuracy"] });
+      return m;
+    }
+
+    async function trainModel() {
+      if (!rawRows.length) return;
+      document.getElementById("trainBtn").disabled = true;
+      document.getElementById("trainStatus").textContent = "Preparing tensors and training model...";
+      const set = prepareTensors(rawRows);
+      testSet = set;
+      model = buildModel(featureNames().length);
+      const lossSeries = []; const accSeries = []; const labels = [];
+      await model.fit(set.xTrain, set.yTrain, {
+        epochs: 35, batchSize: 32, validationSplit: 0.2, shuffle: true,
+        callbacks: { onEpochEnd: async (epoch, logs) => {
+          labels.push(epoch + 1);
+          lossSeries.push(logs.loss);
+          accSeries.push(logs.acc ?? logs.accuracy ?? 0);
+          updateLossChart(labels, lossSeries, accSeries);
+          document.getElementById("trainStatus").textContent =
+            `Training epoch ${epoch + 1}/35\nLoss: ${logs.loss.toFixed(4)}\nAccuracy: ${(logs.acc ?? logs.accuracy ?? 0).toFixed(4)}\nVal Loss: ${(logs.val_loss ?? 0).toFixed(4)}\nVal Accuracy: ${(logs.val_acc ?? logs.val_accuracy ?? 0).toFixed(4)}`;
+        }}
+      });
+      await evaluateModel();
+      document.getElementById("saveBtn").disabled = false;
+      document.getElementById("predictBtn").disabled = false;
+      document.getElementById("trainBtn").disabled = false;
+    }
+
+    function updateLossChart(labels, lossSeries, accSeries) {
+      destroyChart("lossChart");
+      charts.lossChart = baseChart(document.getElementById("lossChart"), {
+        type: "line",
+        data: { labels, datasets: [
+          { label: "Loss", data: lossSeries, borderColor: varColor("--blue"), backgroundColor: "rgba(47,128,237,.15)", fill: true, tension: .25, yAxisID: "y" },
+          { label: "Accuracy", data: accSeries, borderColor: varColor("--green"), backgroundColor: "rgba(39,174,96,.05)", fill: false, tension: .25, yAxisID: "y1" }
+        ] },
+        options: { responsive: true, interaction: { mode: "index", intersect: false },
+          scales: {
+            y: { beginAtZero: true, title: { display: true, text: "Loss" } },
+            y1: { beginAtZero: true, max: 1, position: "right", grid: { drawOnChartArea: false }, title: { display: true, text: "Accuracy" } }
+          } }
+      });
+    }
+
+    async function evaluateModel() {
+      const probsTensor = model.predict(testSet.xTest);
+      const probs = Array.from(await probsTensor.data());
+      const preds = probs.map(p => p >= 0.5 ? 1 : 0);
+      const actual = testSet.yTest;
+      let tp=0, tn=0, fp=0, fn=0;
+      for (let i = 0; i < preds.length; i++) {
+        if (actual[i]===1 && preds[i]===1) tp++;
+        else if (actual[i]===0 && preds[i]===0) tn++;
+        else if (actual[i]===0 && preds[i]===1) fp++;
+        else if (actual[i]===1 && preds[i]===0) fn++;
+      }
+      const accuracy = (tp+tn) / Math.max(1, preds.length);
+      const precisionPos = tp / Math.max(1, tp+fp);
+      const recallPos = tp / Math.max(1, tp+fn);
+      const f1Pos = (2*precisionPos*recallPos) / Math.max(1e-7, precisionPos+recallPos);
+      document.getElementById("metricAccuracy").textContent = accuracy.toFixed(2);
+      document.getElementById("trainStatus").textContent += `\n\nEvaluation complete. Test accuracy: ${accuracy.toFixed(3)}`;
+      updateMetricsChart(precisionPos, recallPos, f1Pos, accuracy);
+      updateConfusionTable(tn, fp, fn, tp);
+    }
+
+    function updateMetricsChart(precisionPos, recallPos, f1Pos, accuracy) {
+      const cfg = activeConfig();
+      destroyChart("metricsChart");
+      charts.metricsChart = baseChart(document.getElementById("metricsChart"), {
+        type: "bar",
+        data: { labels: [`Precision-${cfg.positive}`, `Recall-${cfg.positive}`, `F1-${cfg.positive}`, "Accuracy"],
+          datasets: [{ label: "Score", data: [precisionPos, recallPos, f1Pos, accuracy], backgroundColor: ["#8e44ad","#16a085","#d35400",varColor("--blue")] }] },
+        options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 1 } } }
+      });
+    }
+
+    function updateConfusionTable(tn, fp, fn, tp) {
+      document.getElementById("cmTN").textContent = tn;
+      document.getElementById("cmFP").textContent = fp;
+      document.getElementById("cmFN").textContent = fn;
+      document.getElementById("cmTP").textContent = tp;
+    }
+
+    function getFormInput() {
+      const cfg = activeConfig();
+      const obj = {};
+      cfg.features.forEach(f => {
+        const el = document.getElementById(f.name);
+        if (f.type === "bool") obj[f.name] = el.value === "true";
+        else if (f.type === "int") obj[f.name] = Math.max(0, Math.round(Number(el.value) || 0));
+        else obj[f.name] = Number(el.value);
+      });
+      return obj;
+    }
+
+    async function predictCurrentInput() {
+      if (!model) return;
+      const cfg = activeConfig();
+      const obj = getFormInput();
+      cfg.features.forEach(f => {
+        if (f.type === "int") document.getElementById(f.name).value = obj[f.name];
+      });
+      const arr = featureNames().map(f => toModelNumber(f, obj[f]));
+      const tensor = normalizeTensor(tf.tensor2d([arr]));
+      const posProb = (await model.predict(tensor).data())[0];
+      const negProb = 1 - posProb;
+      const label = posProb >= 0.5 ? cfg.positive : cfg.negative;
+      const confidence = Math.max(posProb, negProb) * 100;
+      document.getElementById("predictionOutput").textContent =
+        `PREDICTION OUTCOME: ${label.toUpperCase()} (${confidence.toFixed(1)}% Confidence)`;
+      updateConfidenceChart(negProb, posProb);
+      updateFeatureChart(obj);
+    }
+
+    function updateConfidenceChart(negProb, posProb) {
+      const cfg = activeConfig();
+      destroyChart("confidenceChart");
+      charts.confidenceChart = baseChart(document.getElementById("confidenceChart"), {
+        type: "bar",
+        data: { labels: [cfg.negative, cfg.positive], datasets: [{ label: "Probability", data: [negProb, posProb], backgroundColor: [varColor("--red"), varColor("--green")] }] },
+        options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 1 } } }
+      });
+    }
+
+    function updateFeatureChart(obj) {
+      destroyChart("featureChart");
+      const values = featureNames().map(f => toModelNumber(f, obj[f]));
+      charts.featureChart = baseChart(document.getElementById("featureChart"), {
+        type: "radar",
+        data: { labels: featureNames(), datasets: [{ label: "Input profile", data: values, borderColor: "#16a085", backgroundColor: "rgba(22,160,133,.2)" }] },
+        options: { responsive: true, scales: { r: { beginAtZero: true, pointLabels: { font: { size: 11 } },
+          ticks: { callback: value => Number.isInteger(value) ? value : "" } } } }
+      });
+    }
+
+    async function saveModel() {
+      if (!model) return;
+      await model.save(`downloads://${activeKey}-model`);
+    }
+
+    async function loadModelFiles(files) {
+      const jsonFile = Array.from(files).find(f => f.name.endsWith(".json"));
+      const weightFiles = Array.from(files).filter(f => f.name.endsWith(".bin"));
+      if (!jsonFile || !weightFiles.length) {
+        alert("Please select the model JSON and weight BIN files together.");
+        return;
+      }
+      model = await tf.loadLayersModel(tf.io.browserFiles([jsonFile, ...weightFiles]));
+      document.getElementById("trainStatus").textContent = "Model loaded successfully. Load the matching dataset and then run predictions.";
+      document.getElementById("predictBtn").disabled = false;
+      document.getElementById("saveBtn").disabled = false;
+    }
+
+    async function handleCSVText(text) {
+      try {
+        rawRows = parseCSV(text);
+        if (!rawRows.length) throw new Error("No rows found.");
+        updatePreview(rawRows);
+        summarizeData(rawRows);
+      } catch (err) {
+        document.getElementById("datasetStatus").textContent = "Error loading CSV: " + err.message;
+      }
+    }
+
+    document.getElementById("csvFile").addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const text = await file.text();
+      await handleCSVText(text);
+    });
+
+    document.getElementById("loadSampleBtn").addEventListener("click", async () => {
+      await handleCSVText(activeConfig().sampleCSV);
+    });
+
+    document.getElementById("trainBtn").addEventListener("click", trainModel);
+    document.getElementById("predictBtn").addEventListener("click", predictCurrentInput);
+    document.getElementById("saveBtn").addEventListener("click", saveModel);
+    document.getElementById("loadBtn").addEventListener("click", () => document.getElementById("modelFiles").click());
+    document.getElementById("modelFiles").addEventListener("change", async (e) => loadModelFiles(e.target.files));
+
+    renderDatasetChrome();
+    resetForNewDataset();
+  </script>
+</body>
+</html>

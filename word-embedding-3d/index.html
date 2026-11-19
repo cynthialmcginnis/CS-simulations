@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Word Embedding Space Visualization</title>
+    <script src="https://cdn.plot.ly/plotly-2.18.0.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #2c3e50 100%);
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #plotDiv {
+            width: 100%;
+            height: 100vh;
+        }
+
+        .info-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
+            padding: 25px;
+            border-radius: 12px;
+            max-width: 400px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            z-index: 1000;
+        }
+
+        .info-panel h1 {
+            font-size: 24px;
+            margin-bottom: 12px;
+            font-weight: 700;
+        }
+
+        .info-panel p {
+            font-size: 14px;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+
+        .controls {
+            font-size: 13px;
+            font-weight: 600;
+            margin: 15px 0;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+        }
+
+        .legend {
+            margin-top: 20px;
+        }
+
+        .legend-title {
+            font-weight: 700;
+            font-size: 15px;
+            margin-bottom: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 8px 0;
+            font-size: 13px;
+        }
+
+        .color-box {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            margin-right: 12px;
+            border: 2px solid white;
+        }
+
+        .insight {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.3);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .insight strong {
+            color: #60a5fa;
+        }
+
+        @media (max-width: 768px) {
+            .info-panel {
+                max-width: 90%;
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="plotDiv"></div>
+    
+    <div class="info-panel">
+        <h1>3D Word Embedding Space</h1>
+        <p>Words with similar meanings cluster together in 3D vector space. This represents how language models understand relationships between words.</p>
+        
+        <div class="controls">
+            🖱️ Click + Drag to rotate<br>
+            🔍 Scroll to zoom<br>
+            📌 Hover over points for details
+        </div>
+        
+        <div class="legend">
+            <div class="legend-title">Word Clusters by Category:</div>
+            
+            <div class="legend-item">
+                <div class="color-box" style="background: #3b82f6;"></div>
+                <span><strong>Academic:</strong> faculty, student, professor (Z ≈ +4)</span>
+            </div>
+            
+            <div class="legend-item">
+                <div class="color-box" style="background: #ef4444;"></div>
+                <span><strong>Food:</strong> pizza, burger, restaurant (Z ≈ -4)</span>
+            </div>
+            
+            <div class="legend-item">
+                <div class="color-box" style="background: #10b981;"></div>
+                <span><strong>Vehicles:</strong> car, truck, vehicle (Z ≈ +5)</span>
+            </div>
+            
+            <div class="legend-item">
+                <div class="color-box" style="background: #f59e0b;"></div>
+                <span><strong>Animals:</strong> dog, cat, pet (Z ≈ -3)</span>
+            </div>
+        </div>
+        
+        <div class="insight">
+            <strong>Key Insight:</strong> Notice the blue dashed line connecting "faculty" and "student" - they're positioned close together because they appear in similar contexts like "The ___ attended the lecture" or "The ___ submitted the assignment."
+        </div>
+    </div>
+
+    <script>
+        // Word data with dramatic 3D positions showing depth
+        const words = [
+            // Academic cluster - forward in space (positive Z)
+            { word: 'faculty', x: 3, y: 2, z: 4, color: '#3b82f6', category: 'Academic' },
+            { word: 'student', x: 3.5, y: 2.3, z: 3.5, color: '#3b82f6', category: 'Academic' },
+            { word: 'professor', x: 2.8, y: 1.8, z: 4.2, color: '#3b82f6', category: 'Academic' },
+            { word: 'teacher', x: 3.3, y: 2.5, z: 3.8, color: '#3b82f6', category: 'Academic' },
+            { word: 'university', x: 2.5, y: 2.2, z: 3.6, color: '#3b82f6', category: 'Academic' },
+            
+            // Food cluster - deep back (negative Z)
+            { word: 'pizza', x: -2, y: 3, z: -4.5, color: '#ef4444', category: 'Food' },
+            { word: 'burger', x: -2.5, y: 3.2, z: -4, color: '#ef4444', category: 'Food' },
+            { word: 'restaurant', x: -1.8, y: 2.7, z: -4.8, color: '#ef4444', category: 'Food' },
+            
+            // Vehicle cluster - far forward (high positive Z)
+            { word: 'car', x: 1, y: -3, z: 5, color: '#10b981', category: 'Vehicle' },
+            { word: 'truck', x: 1.3, y: -3.3, z: 5.3, color: '#10b981', category: 'Vehicle' },
+            { word: 'vehicle', x: 0.8, y: -2.7, z: 4.7, color: '#10b981', category: 'Vehicle' },
+            
+            // Animal cluster - back left (negative Z)
+            { word: 'dog', x: -3.5, y: -2, z: -3, color: '#f59e0b', category: 'Animal' },
+            { word: 'cat', x: -3.8, y: -2.3, z: -3.5, color: '#f59e0b', category: 'Animal' },
+            { word: 'pet', x: -3.2, y: -1.8, z: -2.7, color: '#f59e0b', category: 'Animal' }
+        ];
+
+        // Create the main scatter plot for word points
+        const wordTrace = {
+            x: words.map(w => w.x),
+            y: words.map(w => w.y),
+            z: words.map(w => w.z),
+            mode: 'markers+text',
+            type: 'scatter3d',
+            text: words.map(w => w.word),
+            textposition: 'top center',
+            textfont: {
+                size: 14,
+                color: 'white',
+                family: 'Arial, sans-serif',
+                weight: 'bold'
+            },
+            marker: {
+                size: 12,
+                color: words.map(w => w.color),
+                line: {
+                    color: 'white',
+                    width: 2
+                },
+                opacity: 0.9
+            },
+            hoverinfo: 'text',
+            hovertext: words.map(w => 
+                `<b>${w.word}</b><br>` +
+                `Category: ${w.category}<br>` +
+                `Position: [${w.x}, ${w.y}, ${w.z}]`
+            ),
+            showlegend: false
+        };
+
+        // Create vector lines from origin to each word
+        const lineTraces = words.map(w => ({
+            x: [0, w.x],
+            y: [0, w.y],
+            z: [0, w.z],
+            mode: 'lines',
+            type: 'scatter3d',
+            line: {
+                color: w.color,
+                width: 4
+            },
+            opacity: 0.4,
+            hoverinfo: 'skip',
+            showlegend: false
+        }));
+
+        // Special connection line between faculty and student
+        const faculty = words.find(w => w.word === 'faculty');
+        const student = words.find(w => w.word === 'student');
+        const connectionTrace = {
+            x: [faculty.x, student.x],
+            y: [faculty.y, student.y],
+            z: [faculty.z, student.z],
+            mode: 'lines',
+            type: 'scatter3d',
+            line: {
+                color: '#3b82f6',
+                width: 6,
+                dash: 'dash'
+            },
+            opacity: 0.7,
+            name: 'Faculty ↔ Student',
+            hoverinfo: 'text',
+            hovertext: 'Connection between faculty and student<br>Distance: ' + 
+                Math.sqrt(
+                    Math.pow(faculty.x - student.x, 2) + 
+                    Math.pow(faculty.y - student.y, 2) + 
+                    Math.pow(faculty.z - student.z, 2)
+                ).toFixed(2) + ' units',
+            showlegend: false
+        };
+
+        // Origin point marker
+        const originTrace = {
+            x: [0],
+            y: [0],
+            z: [0],
+            mode: 'markers',
+            type: 'scatter3d',
+            marker: {
+                size: 10,
+                color: 'white',
+                symbol: 'diamond',
+                line: {
+                    color: '#fbbf24',
+                    width: 2
+                }
+            },
+            hoverinfo: 'text',
+            hovertext: '<b>Origin</b><br>Position: [0, 0, 0]',
+            showlegend: false
+        };
+
+        // Layout configuration
+        const layout = {
+            title: {
+                text: '<b>3D Word Embedding Vector Space</b>',
+                font: { 
+                    size: 26, 
+                    color: 'white',
+                    family: 'Arial, sans-serif'
+                },
+                y: 0.98
+            },
+            scene: {
+                xaxis: { 
+                    title: '<b>Dimension 1</b>', 
+                    gridcolor: '#444', 
+                    color: 'white',
+                    backgroundcolor: '#0a0a1a',
+                    showbackground: true
+                },
+                yaxis: { 
+                    title: '<b>Dimension 2</b>', 
+                    gridcolor: '#444', 
+                    color: 'white',
+                    backgroundcolor: '#0a0a1a',
+                    showbackground: true
+                },
+                zaxis: { 
+                    title: '<b>Dimension 3 (Depth)</b>', 
+                    gridcolor: '#444', 
+                    color: 'white',
+                    backgroundcolor: '#0a0a1a',
+                    showbackground: true
+                },
+                bgcolor: '#0a0a1a',
+                camera: {
+                    eye: { x: 1.5, y: 1.5, z: 1.3 },
+                    center: { x: 0, y: 0, z: 0 }
+                }
+            },
+            paper_bgcolor: '#0a0a1a',
+            plot_bgcolor: '#0a0a1a',
+            font: { 
+                color: 'white',
+                family: 'Arial, sans-serif'
+            },
+            showlegend: false,
+            margin: { l: 0, r: 0, t: 50, b: 0 },
+            hovermode: 'closest'
+        };
+
+        // Configuration options
+        const config = {
+            responsive: true,
+            displayModeBar: true,
+            displaylogo: false,
+            modeBarButtonsToRemove: ['toImage'],
+            modeBarButtonsToAdd: [{
+                name: 'Reset View',
+                icon: Plotly.Icons.home,
+                click: function(gd) {
+                    Plotly.relayout(gd, {
+                        'scene.camera': {
+                            eye: { x: 1.5, y: 1.5, z: 1.3 }
+                        }
+                    });
+                }
+            }]
+        };
+
+        // Render the plot
+        Plotly.newPlot(
+            'plotDiv',
+            [originTrace, ...lineTraces, connectionTrace, wordTrace],
+            layout,
+            config
+        );
+
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            Plotly.Plots.resize('plotDiv');
+        });
+
+        console.log('3D Word Embedding Visualization loaded successfully!');
+        console.log('Word count:', words.length);
+        console.log('Categories:', [...new Set(words.map(w => w.category))]);
+    </script>
+</body>
+</html>
